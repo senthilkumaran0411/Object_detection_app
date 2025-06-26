@@ -1,9 +1,10 @@
 streamlit
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
 opencv-python
 Pillow
 numpy
 matplotlib
 pyyaml
-torch==2.2.2+cpu
-torchvision==0.17.2+cpu
+
 --extra-index-url https://download.pytorch.org/whl/cpu
