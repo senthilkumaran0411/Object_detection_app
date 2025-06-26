@@ -1,10 +1,11 @@
 streamlit
-torch==2.2.2+cpu
-torchvision==0.17.2+cpu
-opencv-python
-Pillow
 numpy
+Pillow
+opencv-python
 matplotlib
 pyyaml
 
+# Install torch from official PyTorch CPU wheels (required for Streamlit Cloud)
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
 --extra-index-url https://download.pytorch.org/whl/cpu
