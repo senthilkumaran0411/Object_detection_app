@@ -39,8 +39,7 @@ This project is a modern and interactive web application built with **Streamlit*
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/yolo-object-detection-streamlit.git
-cd yolo-object-detection-streamlit
+git clone https://github.com/senthilkumaran0411/Object_detection_app.git
 ```
 
 ### 2. Create a Virtual Environment (optional but recommended)
@@ -94,15 +93,7 @@ pip install streamlit torch torchvision opencv-python numpy Pillow
 - **Custom button styles**, shadows, animations  
 - In-app **loader spinner** while processing  
 
----
 
-## 🖼️ Demo Preview *(Optional)*
-
-| Light Mode             | Dark Mode              |
-|------------------------|------------------------|
-| ![light](assets/light_preview.png) | ![dark](assets/dark_preview.png) |
-
----
 
 ## 📌 Notes
 
