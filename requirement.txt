@@ -4,3 +4,6 @@ streamlit
 numpy
 matplotlib
 pyyaml
+torch
+torchvision
+ultralytics
