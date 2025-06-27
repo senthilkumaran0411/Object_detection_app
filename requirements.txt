@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.7.1+cpu
-torchvision==0.17.1+cpu
+torchvision==0.18.1+cpu  # Updated to match PyTorch 2.7.1
 
 streamlit==1.46.1
 numpy==1.26.4
