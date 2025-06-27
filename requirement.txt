@@ -1,11 +1,10 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
+
 streamlit
 numpy
 Pillow
-opencv-python
+opencv-python-headless==4.9.0.80  # Use headless version for cloud
 matplotlib
 pyyaml
-
-# Install torch from official PyTorch CPU wheels (required for Streamlit Cloud)
-torch==2.2.2+cpu
-torchvision==0.17.2+cpu
---extra-index-url https://download.pytorch.org/whl/cpu
