@@ -1,12 +1,10 @@
-import torch
+import streamlit as st
 from PIL import Image
 import cv2
 import numpy as np
 import tempfile
-import streamlit as st
 import os
-import subprocess
-import sys
+from ultralytics import YOLO
 
 # Set page config
 st.set_page_config(
@@ -15,206 +13,103 @@ st.set_page_config(
     layout="wide"
 )
 
-# Load custom HTML if needed
-try:
-    with open("index.html", "r", encoding="utf-8") as f:
-        st.markdown(f.read(), unsafe_allow_html=True)
-except FileNotFoundError:
-    pass  # Continue without custom HTML if file doesn't exist
+# Title and description
+st.title("AI Object Detection - YOLOv5")
+st.write("Upload an image or video for object detection using a pretrained YOLOv5 model.")
 
-# Load the pretrained YOLOv5 model with proper error handling
+# Load YOLO model
 @st.cache_resource
 def load_model():
     try:
-        # First try to import ultralytics directly
-        import ultralytics
-        model = torch.hub.load('ultralytics/yolov5', 'yolov5m', pretrained=True)
-        return model
-    except ImportError:
-        # If not found, install it properly
-        st.warning("Installing required ultralytics package...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics"])
-        import ultralytics
-        model = torch.hub.load('ultralytics/yolov5', 'yolov5m', pretrained=True)
+        model = YOLO("yolov5s.pt")  # You can also use yolov5m.pt or yolov5l.pt
         return model
     except Exception as e:
-        st.error(f"Failed to load model: {str(e)}")
+        st.error(f"Error loading model: {e}")
         return None
 
 model = load_model()
 
-def process_frame(frame):
-    if model is None:
-        return frame  # Return original frame if model failed to load
-    
+# Function to process image with model
+def process_image(image):
     try:
-        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         results = model(image)
-        results.render()
-        processed_frame = results.ims[0]
-        return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+        annotated = results[0].plot()
+        return annotated
     except Exception as e:
-        st.error(f"Error processing frame: {str(e)}")
-        return frame  # Return original frame if processing fails
+        st.error(f"Image processing failed: {e}")
+        return None
 
-# Streamlit UI
-st.title("AI Object Detection - YOLOv5")
-st.write("Upload a video, use your webcam, or upload an image for real-time object detection.")
+# Sidebar controls
+st.sidebar.title("Upload Options")
+uploaded_image = st.sidebar.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
+uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
 
-# Sidebar
-st.sidebar.title("Control Panel")
-use_webcam = st.sidebar.checkbox("Use Webcam")
-uploaded_video = st.sidebar.file_uploader("Upload a video", type=["mp4", "avi", "mov"])
-uploaded_image = st.sidebar.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+# Image upload handling
+if uploaded_image:
+    st.subheader("Input Image")
+    image = Image.open(uploaded_image)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-if 'stop_webcam' not in st.session_state:
-    st.session_state.stop_webcam = False
-if 'processing' not in st.session_state:
-    st.session_state.processing = False
+    st.subheader("Processed Image")
+    annotated_image = process_image(image)
 
-# Image Upload
-if uploaded_image and not use_webcam and not uploaded_video:
-    st.session_state.processing = True
-    try:
-        st.write("Processing uploaded image...")
-        input_image = Image.open(uploaded_image)
-        processed_image = process_frame(np.array(input_image))
+    if annotated_image is not None:
+        st.image(annotated_image, caption="Detected Objects", use_column_width=True)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Input Image")
-            st.image(input_image, width=400)
-        with col2:
-            st.subheader("Processed Image")
-            st.image(Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)), width=400)
-
-        # Prepare download button
-        processed_image_rgb = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
-        img_pil = Image.fromarray(processed_image_rgb)
-
+        # Download button
+        img_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_file:
-            temp_file_path = tmp_file.name
-            img_pil.save(tmp_file.name, format="PNG")
+            pil_img.save(tmp_file.name)
+            with open(tmp_file.name, "rb") as f:
+                st.download_button("Download Processed Image", f.read(), "processed_image.png", "image/png")
+            os.unlink(tmp_file.name)
 
-            with open(temp_file_path, "rb") as f:
-                file_content = f.read()
+# Video upload handling
+elif uploaded_video:
+    st.subheader("Uploaded Video")
+    tfile = tempfile.NamedTemporaryFile(delete=False)
+    tfile.write(uploaded_video.read())
 
-            st.download_button(
-                label="Download Processed Image",
-                data=file_content,
-                file_name="processed_image.png",
-                mime="image/png"
-            )
-    except Exception as e:
-        st.error(f"Error processing image: {str(e)}")
-    finally:
-        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
-            try:
-                os.unlink(temp_file_path)
-            except:
-                pass
-        st.session_state.processing = False
+    cap = cv2.VideoCapture(tfile.name)
+    if not cap.isOpened():
+        st.error("Unable to read video file.")
+    else:
+        stframe = st.empty()
+        temp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        out = cv2.VideoWriter(temp_out.name, fourcc, fps, (width, height))
 
-# Video Upload
-elif uploaded_video and not use_webcam and not st.session_state.processing:
-    st.session_state.processing = True
-    temp_video_path = None
-    temp_processed_video_path = None
-    
-    try:
-        st.write("Processing uploaded video...")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_video:
-            temp_video_path = tmp_video.name
-            tmp_video.write(uploaded_video.read())
+        progress = st.progress(0)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        count = 0
 
-        cap = cv2.VideoCapture(temp_video_path)
-        
-        if not cap.isOpened():
-            st.error("Error opening video file")
-        else:
-            fps = int(cap.get(cv2.CAP_PROP_FPS))
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_processed:
-                temp_processed_video_path = tmp_processed.name
+            results = model(frame)
+            annotated = results[0].plot()
+            out.write(annotated)
+            stframe.image(annotated, channels="BGR", use_column_width=True)
 
-            out = cv2.VideoWriter(temp_processed_video_path, fourcc, fps, (width, height))
-            stframe = st.empty()
-            progress_bar = st.progress(0)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            processed_frames = 0
+            count += 1
+            progress.progress(min(count / frame_count, 1.0))
 
-            while cap.isOpened() and not st.session_state.stop_webcam:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+        cap.release()
+        out.release()
+        st.success("Video Processing Completed.")
 
-                processed_frame = process_frame(frame)
-                out.write(processed_frame)
-                stframe.image(Image.fromarray(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)))
-                processed_frames += 1
-                progress_bar.progress(processed_frames / total_frames)
+        with open(temp_out.name, "rb") as f:
+            st.download_button("Download Processed Video", f.read(), "processed_video.mp4", "video/mp4")
 
-            cap.release()
-            out.release()
-            st.success("Video processing complete.")
+        os.unlink(temp_out.name)
+        os.unlink(tfile.name)
 
-            with open(temp_processed_video_path, "rb") as video_file:
-                video_content = video_file.read()
-
-            st.download_button(
-                label="Download Processed Video",
-                data=video_content,
-                file_name="processed_video.mp4",
-                mime="video/mp4"
-            )
-    except Exception as e:
-        st.error(f"Error processing video: {str(e)}")
-    finally:
-        for file_path in [temp_video_path, temp_processed_video_path]:
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.unlink(file_path)
-                except:
-                    pass
-        st.session_state.processing = False
-
-# Webcam
-elif use_webcam and not st.session_state.processing:
-    st.session_state.processing = True
-    try:
-        st.write("Capturing from webcam...")
-        cap = cv2.VideoCapture(0)
-
-        if not cap.isOpened():
-            st.error("Could not access the webcam. Please check your device.")
-        else:
-            stframe = st.empty()
-            stop_button = st.button("Stop Webcam")
-
-            while cap.isOpened() and not stop_button:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Failed to capture frame.")
-                    break
-
-                frame = cv2.flip(frame, 1)
-                processed_frame = process_frame(frame)
-                stframe.image(Image.fromarray(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)))
-
-                if stop_button:
-                    st.session_state.stop_webcam = True
-                    break
-
-            cap.release()
-            st.write("Webcam feed stopped.")
-    except Exception as e:
-        st.error(f"Error accessing webcam: {str(e)}")
-    finally:
-        st.session_state.stop_webcam = False
-        st.session_state.processing = False
-
-# Add some spacing at the bottom
-st.markdown("<br><br>", unsafe_allow_html=True)
+# Webcam (Note: only works locally or with streamlit-webrtc, not on cloud)
+else:
+    st.info("Upload an image or video from the sidebar to begin detection.")
